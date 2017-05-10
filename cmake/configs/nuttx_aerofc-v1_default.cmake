@@ -23,6 +23,8 @@ set(config_module_list
 	drivers/ist8310
 	drivers/ll40ls
 	drivers/aerofc_adc
+    # Adding BMM
+    drivers/bmm150
 	modules/sensors
 	# dummy tone alarm
 	modules/dummy
