@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2014-2016 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2017 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,84 +32,88 @@
  ****************************************************************************/
 
 /**
- * @file mavlink_stream.h
- * Mavlink messages stream definition.
+ * @file camera_feedback.hpp
  *
- * @author Anton Babushkin <anton.babushkin@me.com>
  */
 
-#ifndef MAVLINK_STREAM_H_
-#define MAVLINK_STREAM_H_
+#pragma once
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <stdbool.h>
+#include <poll.h>
+#include <mathlib/mathlib.h>
+#include <systemlib/systemlib.h>
+#include <systemlib/err.h>
+#include <systemlib/param/param.h>
+
+#include <px4_config.h>
+#include <px4_defines.h>
+#include <px4_tasks.h>
+#include <px4_posix.h>
 #include <drivers/drv_hrt.h>
 
-class Mavlink;
+#include <uORB/uORB.h>
+#include <uORB/topics/camera_trigger.h>
+#include <uORB/topics/camera_capture.h>
+#include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/vehicle_local_position.h>
+#include <uORB/topics/vehicle_global_position.h>
 
-class MavlinkStream
+typedef enum : uint8_t {
+	CAMERA_FEEDBACK_MODE_NONE = 0,
+	CAMERA_FEEDBACK_MODE_TRIGGER,
+	CAMERA_FEEDBACK_MODE_PWM
+} camera_feedback_mode_t;
+
+class CameraFeedback
 {
-
 public:
-	MavlinkStream *next;
-
-	MavlinkStream(Mavlink *mavlink);
-	virtual ~MavlinkStream();
+	/**
+	 * Constructor
+	 */
+	CameraFeedback();
 
 	/**
-	 * Get the interval
+	 * Destructor, also kills task.
+	 */
+	~CameraFeedback();
+
+	/**
+	 * Start the task.
 	 *
-	 * @param interval the inveral in microseconds (us) between messages
+	 * @return		OK on success.
 	 */
-	void set_interval(const unsigned int interval);
+	int			start();
 
 	/**
-	 * Get the interval
-	 *
-	 * @return the inveral in microseconds (us) between messages
+	 * Stop the task.
 	 */
-	unsigned get_interval() { return _interval; }
-
-	/**
-	 * @return 0 if updated / sent, -1 if unchanged
-	 */
-	int update(const hrt_abstime t);
-	virtual const char *get_name() const = 0;
-	virtual uint16_t get_id() = 0;
-
-	/**
-	 * @return true if steam rate shouldn't be adjusted
-	 */
-	virtual bool const_rate() { return false; }
-
-	/**
-	 * Get maximal total messages size on update
-	 */
-	virtual unsigned get_size() = 0;
-
-	/**
-	 * Get the average message size
-	 *
-	 * For a normal stream this equals the message size,
-	 * for something like a parameter or mission message
-	 * this equals usually zero, as no bandwidth
-	 * needs to be reserved
-	 */
-	virtual unsigned get_size_avg() { return get_size(); }
-
-protected:
-	Mavlink     *_mavlink;
-	unsigned int _interval;		///< if set to zero = unlimited rate
-
-#ifndef __PX4_QURT
-	virtual void send(const hrt_abstime t) = 0;
-#endif
+	void		stop();
 
 private:
-	hrt_abstime _last_sent;
 
-	/* do not allow top copying this class */
-	MavlinkStream(const MavlinkStream &);
-	MavlinkStream &operator=(const MavlinkStream &);
+	bool		_task_should_exit;		/**< if true, task should exit */
+	int			_main_task;				/**< handle for task */
+
+	int			_trigger_sub;
+	int			_lpos_sub;
+	int			_gpos_sub;
+	int			_att_sub;
+
+	orb_advert_t	_capture_pub;
+
+	param_t			_p_feedback;
+
+	camera_feedback_mode_t _camera_feedback_mode;
+
+	void		task_main();
+
+	/**
+	 * Shim for calling task_main from task_create.
+	 */
+	static void	task_main_trampoline(int argc, char *argv[]);
+
 };
-
-
-#endif /* MAVLINK_STREAM_H_ */
